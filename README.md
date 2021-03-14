@@ -6,8 +6,12 @@ Simple weather app using HTML, CSS, and JavaScript
 
 ## Tutorial
 
-Watch the tutorial 👉 https://youtube.com/watch?v=WZNG8UomjSI
+Weather App Tutorial 👉 https://youtube.com/watch?v=WZNG8UomjSI
+
+Geolocation Tutorial 👉 https://youtube.com/watch?v=JdJ2VBbYYTQ
 
 ## Demo site
 
-http://eyl327.mywebcommunity.org/weather/
+Without Geolocation 👉 https://freshidea.com/jonah/app/weather
+
+With Geolocation 👉 https://freshidea.com/jonah/app/weather/geolocation
