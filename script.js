@@ -39,8 +39,18 @@ let weather = {
   },
 };
 
+const loading = document.querySelector(".Loading")
+	let timer;
 document.querySelector(".search button").addEventListener("click", function () {
   weather.search();
+  clearInterval(timer)
+	timer = setInterval(()=>{
+		loading.style.visibility = "visible";
+		},500)
+	setTimeout(()=>{
+		loading.innerHTML = " ";
+},10000)
+	
 });
 
 document
@@ -50,5 +60,10 @@ document
       weather.search();
     }
   });
+
+  
+
+
+	
 
 weather.fetchWeather("Denver");
