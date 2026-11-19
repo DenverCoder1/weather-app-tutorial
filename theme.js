@@ -1,40 +1,56 @@
-(() => {
-  const root = document.documentElement;
-  const systemTheme = matchMedia("(prefers-color-scheme: dark)");
-  const storageKey = "atmos-tema";
-  let preference;
-  let button;
+﻿const preferenceKey = "atmos-configuracoes";
+const preferenceOptions = {
+  temperature: ["celsius", "fahrenheit"],
+  wind: ["kmh", "mph"],
+  theme: ["system", "light", "dark"],
+};
+const systemTheme = matchMedia("(prefers-color-scheme: dark)");
+let storedPreferences;
+let legacyTheme;
+try {
+  legacyTheme = localStorage.getItem("atmos-tema");
+  storedPreferences = JSON.parse(localStorage.getItem(preferenceKey));
+} catch {
+  // As preferências padrão continuam disponíveis.
+}
 
+const preferences = Object.fromEntries(Object.entries(preferenceOptions).map(([key, options]) => {
+  const value = storedPreferences?.[key] ?? (key === "theme" ? legacyTheme : undefined);
+  return [key, options.includes(value) ? value : options[0]];
+}));
+
+function savePreferences() {
   try {
-    preference = localStorage.getItem(storageKey);
+    localStorage.setItem(preferenceKey, JSON.stringify(preferences));
+    return true;
   } catch {
-    // O tema do sistema continua disponível sem acesso ao armazenamento.
+    return false;
   }
-  if (preference !== "light" && preference !== "dark") preference = null;
+}
 
-  function applyTheme() {
-    const theme = preference ?? (systemTheme.matches ? "dark" : "light");
-    root.dataset.theme = theme;
-    if (!button) return;
-    const light = theme === "light";
-    button.setAttribute("aria-pressed", String(light));
-    button.querySelector("span").textContent = light ? "☾" : "☀";
-    button.title = light ? "Ativar tema escuro" : "Ativar tema claro";
-  }
+function applyTheme() {
+  const theme = preferences.theme === "system" ? (systemTheme.matches ? "dark" : "light") : preferences.theme;
+  document.documentElement.dataset.theme = theme;
+  const button = document.querySelector(".theme-button");
+  if (!button) return;
+  const light = theme === "light";
+  button.setAttribute("aria-pressed", String(light));
+  button.querySelector("span").textContent = light ? "☾" : "☀";
+  button.title = light ? "Ativar tema escuro" : "Ativar tema claro";
+}
 
-  applyTheme();
-  systemTheme.addEventListener("change", applyTheme);
-  document.addEventListener("DOMContentLoaded", () => {
-    button = document.querySelector(".theme-button");
-    applyTheme();
-    button.addEventListener("click", () => {
-      preference = root.dataset.theme === "light" ? "dark" : "light";
-      applyTheme();
-      try {
-        localStorage.setItem(storageKey, preference);
-      } catch {
-        // A escolha permanece válida durante a visita atual.
-      }
-    });
-  });
-})();
+applyTheme();
+systemTheme.addEventListener("change", applyTheme);
+
+function readingUnit(unit) {
+  if (unit === "°C" && preferences.temperature === "fahrenheit") return "°F";
+  if (unit === "km/h" && preferences.wind === "mph") return "mph";
+  return unit;
+}
+
+function convertReading(value, unit, difference = false) {
+  if (!Number.isFinite(value)) return value;
+  if (unit === "°C" && preferences.temperature === "fahrenheit") return value * 1.8 + (difference ? 0 : 32);
+  if (unit === "km/h" && preferences.wind === "mph") return value / 1.609344;
+  return value;
+}

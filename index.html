@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
+  <script src="./weather-data.js" defer></script>
   <script src="./charts.js" defer></script>
   <script src="./cities.js" defer></script>
   <script src="./compare.js" defer></script>
@@ -33,8 +34,8 @@
         <a class="nav-item" href="#comparar" aria-label="Comparar" title="Comparar"><span aria-hidden="true">⇄</span><span class="nav-label">Comparar</span></a>
         <a class="nav-item" href="#mapas" aria-label="Mapas" title="Mapas"><span aria-hidden="true">◇</span><span class="nav-label">Mapas</span></a>
         <a class="nav-item" href="#qualidade-do-ar" aria-label="Qualidade do ar" title="Qualidade do ar"><span aria-hidden="true">≋</span><span class="nav-label">Qualidade do ar</span></a>
-        <button type="button" class="nav-item" disabled aria-label="Calendário, indisponível" title="Calendário, indisponível"><span aria-hidden="true">▣</span><span class="nav-label">Calendário</span></button>
-        <button type="button" class="nav-item" disabled aria-label="Configurações, indisponível" title="Configurações, indisponível"><span aria-hidden="true">⚙</span><span class="nav-label">Configurações</span></button>
+        <a class="nav-item" href="#calendario" title="Calendário" aria-label="Calendário"><span aria-hidden="true">▣</span><span class="nav-label">Calendário</span></a>
+        <a class="nav-item" href="#configuracoes" title="Configurações" aria-label="Configurações"><span aria-hidden="true">⚙</span><span class="nav-label">Configurações</span></a>
       </nav>
     </aside>
 
@@ -57,14 +58,77 @@
         </div>
       </header>
 
-      <p class="status weather-status" role="status"></p>
+      <p class="status weather-status" role="status" tabindex="-1"></p>
+      <p class="city-feedback sr-only" role="status"></p>
+
+      <dialog class="panel history-dialog" aria-labelledby="clear-list-title" aria-describedby="clear-list-description">
+        <h2 id="clear-list-title"></h2>
+        <p id="clear-list-description"></p>
+        <form method="dialog">
+          <button class="control" value="cancelar" autofocus>Cancelar</button>
+          <button class="control" value="limpar"></button>
+        </form>
+      </dialog>
+
+      <section id="calendario" aria-labelledby="calendar-title" tabindex="-1" hidden>
+        <header class="page-heading"><h1 id="calendar-title">Calendário da previsão</h1><p class="calendar-location"></p></header>
+        <div class="panel calendar-panel">
+          <p class="calendar-status" role="status">Aguardando dados da previsão.</p>
+          <ol class="calendar-days" aria-label="Dias com previsão disponível"></ol>
+          <div class="forecast-detail" id="detalhes-calendario" tabindex="-1" aria-labelledby="dia-calendario" role="region" hidden>
+            <h2 id="dia-calendario"></h2>
+            <p class="forecast-detail-summary"></p>
+            <p class="forecast-detail-extra"></p>
+            <a href="#graficos">Ver gráficos do dia</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="configuracoes" aria-labelledby="settings-title" tabindex="-1" hidden>
+        <header class="page-heading"><h1 id="settings-title">Configurações</h1></header>
+        <div class="panel settings-panel">
+          <div class="settings-preferences">
+            <label for="temperature-unit">Unidade de temperatura
+              <select id="temperature-unit" class="control"><option value="celsius">Celsius (°C)</option><option value="fahrenheit">Fahrenheit (°F)</option></select>
+            </label>
+            <label for="wind-unit">Unidade de velocidade do vento
+              <select id="wind-unit" class="control"><option value="kmh">Quilômetros por hora (km/h)</option><option value="mph">Milhas por hora (mph)</option></select>
+            </label>
+            <label for="theme-preference">Tema
+              <select id="theme-preference" class="control"><option value="system">Seguir o sistema</option><option value="light">Claro</option><option value="dark">Escuro</option></select>
+            </label>
+          </div>
+          <div class="settings-group">
+            <h2>Cidade padrão</h2>
+            <p class="default-city-label"></p>
+            <form class="search default-city-search" role="search" aria-label="Buscar cidade padrão">
+              <label class="sr-only" for="default-city-search">Nome da cidade padrão</label>
+              <input type="search" id="default-city-search" class="search-bar" placeholder="Buscar cidade padrão" autocomplete="off"
+                role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="default-city-options">
+              <button class="search-submit" type="submit" aria-label="Buscar cidade padrão" title="Buscar cidade padrão"><span class="search-symbol" aria-hidden="true"></span></button>
+              <div class="suggestion-popup" hidden>
+                <p class="suggestion-status" role="status"></p>
+                <ul id="default-city-options" role="listbox" aria-label="Cidades encontradas"></ul>
+              </div>
+            </form>
+            <button class="control reset-default-city" type="button">Usar a última cidade consultada</button>
+          </div>
+          <div class="settings-group">
+            <h2>Dados salvos neste navegador</h2>
+            <div class="settings-actions">
+              <button class="control clear-history" type="button" disabled>Limpar buscas recentes</button>
+              <button class="control clear-favorites" type="button" disabled>Limpar favoritos</button>
+            </div>
+          </div>
+          <p class="settings-feedback" role="status"></p>
+        </div>
+      </section>
+
       <div class="main-dashboard">
       <div class="page-heading">
         <h1>Visão geral</h1>
         <p class="current-date"></p>
       </div>
-      <p class="city-feedback sr-only" role="status"></p>
-
       <section class="panel city-library" id="favoritos" aria-labelledby="favorites-title" tabindex="-1" hidden>
         <div>
           <h2 id="favorites-title">Cidades favoritas</h2>
@@ -80,15 +144,6 @@
           <ul class="history-list"></ul>
         </div>
       </section>
-      <dialog class="panel history-dialog" aria-labelledby="clear-history-title" aria-describedby="clear-history-description">
-        <h2 id="clear-history-title">Limpar histórico?</h2>
-        <p id="clear-history-description">As buscas recentes serão removidas. Seus favoritos e a cidade padrão serão mantidos.</p>
-        <form method="dialog">
-          <button class="control" value="cancelar" autofocus>Cancelar</button>
-          <button class="control" value="limpar">Limpar histórico</button>
-        </form>
-      </dialog>
-
       <div class="dashboard skeleton" aria-hidden="true" hidden>
         <div class="overview">
           <div class="panel skeleton-current"><span></span><span></span><span></span></div>
@@ -112,7 +167,7 @@
               <p class="feels-like"></p>
               <p class="observation-time"></p>
             </div>
-            <button class="control favorite-toggle" type="button" aria-label="Salvar cidade como favorita"
+            <button class="control favorite-toggle" type="button" aria-label="Cidade favorita"
               aria-pressed="false" title="Salvar cidade como favorita" hidden><span aria-hidden="true">♡</span></button>
           </section>
 
@@ -180,11 +235,11 @@
 
         <section class="panel forecast" aria-labelledby="forecast-title">
           <h2 id="forecast-title">Previsão semanal</h2>
-          <p>Próximos 7 dias</p>
+          <p class="forecast-range" hidden></p>
           <ol class="forecast-list"></ol>
           <p class="forecast-status" hidden>Previsão semanal indisponível.</p>
-          <div class="forecast-detail" id="detalhes-do-dia" hidden>
-            <h3></h3>
+          <div class="forecast-detail" id="detalhes-do-dia" tabindex="-1" aria-labelledby="titulo-detalhes-do-dia" role="region" hidden>
+            <h3 id="titulo-detalhes-do-dia"></h3>
             <p class="forecast-detail-summary"></p>
             <p class="forecast-detail-extra"></p>
             <a href="#graficos">Ver gráficos do dia</a>
@@ -346,7 +401,7 @@
           <p class="air-source">Dados de <a href="https://open-meteo.com/en/docs/air-quality-api">Open-Meteo</a> e <a href="https://atmosphere.copernicus.eu/">Copernicus (CAMS)</a>.</p>
         </div>
       </section>
-      <footer>Dados meteorológicos por <a href="https://open-meteo.com/">Open-Meteo</a></footer>
+      <footer>Dados meteorológicos por <a href="https://open-meteo.com/">Open-Meteo</a>. Busca de cidades com dados do <a href="https://www.geonames.org/">GeoNames</a>.</footer>
     </main>
   </div>
 </body>

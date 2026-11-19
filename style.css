@@ -407,9 +407,33 @@ button:disabled { cursor: not-allowed; }
 .forecast-rain, .hourly-rain { display: block; color: var(--muted); font-size: .8rem; }
 .forecast-values { text-align: right; }
 .forecast-detail { margin-top: 14px; padding: 13px; border-radius: 12px; background: var(--surface-deep); }
-.forecast-detail h3 { margin: 0; font-size: .95rem; }
+.forecast-detail h2, .forecast-detail h3 { margin: 0; font-size: .95rem; }
 .forecast-detail p { margin: 7px 0; color: var(--muted); font-size: .85rem; line-height: 1.5; }
 .forecast-detail a { font-size: .85rem; }
+.calendar-panel, .settings-panel { padding: clamp(14px, 3vw, 24px); }
+.calendar-status, .settings-group p, .settings-feedback { color: var(--muted); }
+.calendar-days, .settings-preferences {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+  gap: 12px;
+}
+.calendar-days { list-style: none; margin: 0; padding: 0; }
+.calendar-days .forecast-choice {
+  height: 100%;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-content: start;
+  padding: 12px;
+  border: 1px solid var(--outline);
+}
+.calendar-days .forecast-values { grid-column: 1 / -1; text-align: start; }
+.calendar-days .forecast-temps { justify-content: flex-start; }
+.settings-preferences { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.settings-preferences label { display: grid; align-content: start; gap: 6px; font-weight: 700; }
+.settings-preferences select { width: 100%; }
+.settings-group { display: grid; justify-items: start; gap: 10px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.settings-group h2 { font-size: 1.13rem; }
+.settings-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-feedback:not(:empty) { margin-top: 14px; }
 
 .hourly { margin-top: 18px; padding: 16px; }
 .hourly h2 { font-size: 1.05rem; }
@@ -444,6 +468,7 @@ button:disabled { cursor: not-allowed; }
 .charts-header h2 { font-size: 1.13rem; }
 .chart-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; }
 .chart-controls select { max-width: 100%; }
+.charts-header > select { max-width: 100%; }
 .chart-period, .chart-empty, .chart-scrubber { color: var(--muted); font-size: .85rem; }
 .chart-period { margin-top: 4px; }
 .chart-empty, .chart-reading { margin: 12px 0 4px; }
@@ -598,6 +623,8 @@ button:disabled { cursor: not-allowed; }
   .page-heading { margin: 20px 0 15px; }
   .current, .skeleton-current { min-height: 246px; }
   .current-content { max-width: 69%; }
+  .search-bar, select.control { font-size: 1rem; }
+  .settings-actions .control, .reset-default-city { max-width: 100%; white-space: normal; }
 }
 @media (max-width: 380px) {
   .metric-grid { grid-template-columns: minmax(0, 1fr); }

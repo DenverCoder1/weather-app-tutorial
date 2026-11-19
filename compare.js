@@ -15,45 +15,35 @@ const comparisonMetrics = {
   ],
 };
 
-function comparisonPeriod(location, forecast, now) {
-  const timezone = forecast.timezone ?? location.timezone;
-  if (!timezone) return {};
-  let formatter;
-  try {
-    formatter = new Intl.DateTimeFormat("pt-BR", {
+function comparisonPeriod(forecast, now) {
+  const { timezone } = forecast;
+  const formatter = timezone ? new Intl.DateTimeFormat("pt-BR", {
       timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit",
       hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "shortOffset",
-    });
-  } catch (error) {
-    if (error instanceof RangeError) return {};
-    throw error;
-  }
+  }) : undefined;
   const partsAt = (timestamp) => {
-    if (!Number.isFinite(timestamp)) return {};
+    if (!formatter || !isTimestamp(timestamp)) return {};
     const parts = Object.fromEntries(formatter.formatToParts(timestamp * 1000)
       .map(({ type, value }) => [type, value]));
     return {
       date: parts.year + "-" + parts.month + "-" + parts.day,
       label: parts.day + "/" + parts.month + "/" + parts.year,
-      hour: Number(parts.hour),
+      minute: Number(parts.hour) * 60 + Number(parts.minute),
       time: parts.hour + ":" + parts.minute + " (" + parts.timeZoneName + ")",
     };
   };
   const today = partsAt(now);
   const daily = forecast.daily;
-  const dayIndex = Array.isArray(daily?.time) ? daily.time.findIndex((timestamp) => {
-    if (!Number.isFinite(timestamp)) return false;
-    // A data diária em Unix usa o deslocamento de referência informado pela API.
-    const date = Number.isFinite(forecast.utc_offset_seconds)
-      ? new Date((timestamp + forecast.utc_offset_seconds) * 1000).toISOString().slice(0, 10)
-      : partsAt(timestamp).date;
-    return date === today.date;
-  }) : -1;
-  const hours = Array.from({ length: 24 }, () => []);
-  if (Array.isArray(forecast.hourly?.time)) {
+  const dayIndex = today.date ? daily.time.findIndex((timestamp) =>
+    dailyDate(timestamp, forecast.utc_offset_seconds, (time) => partsAt(time).date) === today.date) : -1;
+  const hours = new Map();
+  if (today.date) {
     for (const [index, timestamp] of forecast.hourly.time.entries()) {
-      const { date, hour, time } = partsAt(timestamp);
-      if (date === today.date) hours[hour].push({
+      const { date, minute, time } = partsAt(timestamp);
+      if (date !== today.date) continue;
+      if (!hours.has(minute)) hours.set(minute, []);
+      hours.get(minute).push({
+        timestamp,
         localTime: time,
         temperature_2m: forecast.hourly.temperature_2m?.[index],
         wind_speed_10m: forecast.hourly.wind_speed_10m?.[index],
@@ -154,7 +144,7 @@ class WeatherComparison {
       this.update();
       const forecast = await this.fetchForecast(location, request.signal, 1);
       if (request.signal.aborted) return;
-      if (!forecast?.current && !forecast?.daily && !forecast?.hourly) {
+      if (!forecast.available) {
         slot.result = { location, state: "empty", message: "Não há dados meteorológicos para esta cidade." };
         return;
       }
@@ -175,16 +165,17 @@ class WeatherComparison {
     }
   }
 
-  update() {
+  update({ preserveHour = false } = {}) {
     for (const slot of this.slots) this.renderSlot(slot);
     const [a, b] = this.slots;
-    this.swap.disabled = !a.result.location || !b.result.location || Boolean(a.request || b.request);
     const ready = Boolean(a.result.forecast && b.result.forecast);
+    this.swap.disabled = !ready || Boolean(a.request || b.request);
     this.differences.hidden = !ready;
     this.charts.hidden = !ready;
     if (!ready) return;
     this.renderDifferences(a.period, b.period);
-    this.renderChart();
+    if (preserveHour) this.chart.refresh();
+    else this.renderChart();
   }
 
   renderSlot(slot) {
@@ -195,7 +186,7 @@ class WeatherComparison {
     status.dataset.state = state ?? "";
     card.querySelector(".compare-details").hidden = !forecast;
     if (!forecast) return;
-    const period = comparisonPeriod(location, forecast, requestedAt);
+    const period = comparisonPeriod(forecast, requestedAt);
     slot.period = period;
     card.querySelector("h3").textContent = location.name;
     card.querySelector(".compare-region").textContent = cityRegion(location);
@@ -206,7 +197,7 @@ class WeatherComparison {
       ? "Dados de " + period.observed.label + " às " + period.observed.time
       : "Horário dos dados atuais indisponível.";
     card.querySelector(".compare-date").textContent = period.today?.label
-      ? period.today.label + " · dia local, da meia-noite à meia-noite"
+      ? period.today.label + " · dia de referência da previsão local"
       : "Data local indisponível.";
     for (const [group, metrics] of Object.entries(comparisonMetrics)) {
       const list = card.querySelector(".compare-" + group);
@@ -231,26 +222,30 @@ class WeatherComparison {
         const first = a[group]?.[key];
         const second = b[group]?.[key];
         const comparable = (group === "current" ? sameInstant : sameDay) && Number.isFinite(first) && Number.isFinite(second);
-        const difference = comparable ? Math.round((second - first) * 10) / 10 : undefined;
-        const reading = this.formatReading(difference, unit === "%" ? " p.p." : unit);
-        const value = appendComparisonReading(list, label, difference > 0 ? "+" + reading : reading);
-        if (comparable && difference !== 0) value.classList.add("difference-highlight");
+        const difference = comparable ? second - first : undefined;
+        const reading = this.formatReading(difference, unit === "%" ? " p.p." : unit, true);
+        const value = appendComparisonReading(list, label, reading);
+        if (reading.startsWith("+") || reading.startsWith("-")) value.classList.add("difference-highlight");
       }
     }
   }
 
   renderChart() {
     const samples = [];
-    for (let hour = 0; hour < 24; hour++) {
-      const readings = this.slots.map(({ period }) => period.hours?.[hour] ?? []);
-      const occurrences = Math.max(1, ...readings.map((hours) => hours.length));
+    const minutes = [...new Set(this.slots.flatMap(({ period }) => [...period.hours.keys()]))]
+      .sort((a, b) => a - b);
+    let repeated = 0;
+    for (const minute of minutes) {
+      const readings = this.slots.map(({ period }) => period.hours.get(minute) ?? []);
+      const occurrences = Math.max(...readings.map((hours) => hours.length));
       for (let occurrence = 0; occurrence < occurrences; occurrence++) {
-        const time = String(hour).padStart(2, "0") + " h";
+        const time = String(Math.floor(minute / 60)).padStart(2, "0") + ":" + String(minute % 60).padStart(2, "0");
         const label = occurrences > 1 ? time + " · ocorrência " + (occurrence + 1) : time;
-        // O eixo ordena faixas locais, mantendo separadas as horas repetidas.
-        samples.push({ timestamp: samples.length * 3600, time, label,
+        // O eixo compara horários locais e reserva espaço para as ocorrências repetidas.
+        samples.push({ timestamp: minute * 60 + (repeated + occurrence) * 3600, time, label,
           cities: readings.map((hours) => hours[occurrence]) });
       }
+      repeated += occurrences - 1;
     }
     const names = this.slots.map(({ name, result }) => name + " · " + result.location.name);
     const dates = this.slots.map(({ name, period }) => name + ": " + (period.today?.label ?? "data indisponível"));

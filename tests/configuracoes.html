@@ -1,0 +1,16 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+<meta charset="utf-8">
+<title>Teste do calendário e das configurações</title>
+<style>iframe { width: 350px; height: 700px; border: 0; }</style>
+<output id="resultado">Aguardando execução.</output>
+<iframe title="ATMOS em teste"></iframe>
+<script src="configuracoes.js"></script>
+<script src="revisao.js"></script>
+<script>
+  const teste = location.search === "?servicos-reais"
+    ? testarServicosReais : async () => { await testar(); await testarRevisao(); };
+  teste().then(() => publicar("Aprovado. " + resultado.textContent))
+    .catch((erro) => publicar(erro.stack));
+</script>
+</html>

@@ -1,14 +1,25 @@
 const cityStorageKey = "atmos-cidades";
 
 function isCity(location) {
-  return Number.isInteger(location?.id) && typeof location.name === "string" &&
-    Number.isFinite(location.latitude) && Number.isFinite(location.longitude);
+  return Number.isSafeInteger(location?.id) && location.id > 0 &&
+    typeof location.name === "string" && Boolean(location.name.trim()) &&
+    Number.isFinite(location.latitude) && Math.abs(location.latitude) <= 90 &&
+    Number.isFinite(location.longitude) && Math.abs(location.longitude) <= 180;
 }
 
 function cityRegion(location) {
   return [...new Set([location.admin2, location.admin1, location.country])]
-    .filter((part) => part && part !== location.name)
+    .filter((part) => typeof part === "string" && part && part !== location.name)
     .join(", ");
+}
+
+function uniqueCities(list) {
+  const ids = new Set();
+  return Array.isArray(list) ? list.filter((city) => {
+    if (!isCity(city) || ids.has(city.id)) return false;
+    ids.add(city.id);
+    return true;
+  }) : [];
 }
 
 function appendCityLabels(location, element) {
@@ -35,17 +46,25 @@ class CitySearch {
 
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (this.composing) return;
       const query = this.input.value.trim();
-      const choice = this.options[this.activeIndex];
-      const cached = this.suggestionQuery === query ? this.suggestionResults : undefined;
-      this.close();
+      const results = this.suggestionQuery === query ? this.options : undefined;
+      const choice = results?.[this.activeIndex];
       if (choice) select(choice, true);
-      else search(query, cached);
+      else search(query, results);
+      this.close();
     });
     this.input.addEventListener("input", (event) => {
-      if (!event.isComposing) this.schedule();
+      if (!event.isComposing && !this.composing) this.schedule();
     });
-    this.input.addEventListener("compositionend", () => this.schedule());
+    this.input.addEventListener("compositionstart", () => {
+      this.composing = true;
+      this.close();
+    });
+    this.input.addEventListener("compositionend", () => {
+      this.composing = false;
+      this.schedule();
+    });
     this.input.addEventListener("keydown", (event) => this.handleKey(event));
     this.listbox.addEventListener("pointerdown", (event) => {
       if (event.pointerType === "mouse") event.preventDefault();
@@ -56,7 +75,7 @@ class CitySearch {
       const choice = this.options[Number(option.dataset.index)];
       this.close();
       this.input.focus();
-      select(choice, true);
+      if (choice) select(choice, true);
     });
     document.addEventListener("pointerdown", (event) => {
       if (!form.contains(event.target)) this.close();
@@ -74,6 +93,8 @@ class CitySearch {
     this.listbox.replaceChildren();
     this.options = [];
     this.activeIndex = -1;
+    this.suggestionQuery = undefined;
+    this.pendingDirection = undefined;
     this.input.setAttribute("aria-expanded", "false");
     this.input.removeAttribute("aria-activedescendant");
   }
@@ -82,10 +103,6 @@ class CitySearch {
     this.close();
     const query = this.input.value.trim();
     if (query.length < 2) return;
-    if (this.suggestionQuery === query) {
-      this.showSuggestions(this.suggestionResults);
-      return;
-    }
     this.timer = setTimeout(() => this.suggest(query), 250);
   }
 
@@ -93,16 +110,19 @@ class CitySearch {
     const request = new AbortController();
     this.request = request;
     this.popup.hidden = false;
+    this.input.setAttribute("aria-expanded", "true");
     this.suggestionStatus.textContent = "Buscando cidades…";
     try {
       const results = await this.fetchLocations(query, request.signal);
       if (request.signal.aborted || this.input.value.trim() !== query) return;
       this.suggestionQuery = query;
-      this.suggestionResults = results;
       this.showSuggestions(results);
+      if (this.pendingDirection && this.options.length) this.moveSelection(this.pendingDirection);
     } catch {
       if (request.signal.aborted) return;
       this.suggestionStatus.textContent = "Não foi possível obter sugestões. Pressione Enter para tentar a busca.";
+    } finally {
+      if (this.request === request) this.request = undefined;
     }
   }
 
@@ -125,17 +145,28 @@ class CitySearch {
   }
 
   handleKey(event) {
-    if (event.isComposing) return;
+    if (event.isComposing || this.composing) return;
     if (event.key === "Escape" || event.key === "Tab") {
       if (event.key === "Escape" && !this.popup.hidden) event.preventDefault();
       this.close();
       return;
     }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    if (this.popup.hidden) this.schedule();
-    if (!this.options.length) return;
-    event.preventDefault();
+    const query = this.input.value.trim();
+    if (query.length < 2) return;
     const direction = event.key === "ArrowDown" ? 1 : -1;
+    event.preventDefault();
+    if (this.options.length) this.moveSelection(direction);
+    else {
+      this.pendingDirection = direction;
+      if (!this.request && this.suggestionQuery !== query) {
+        clearTimeout(this.timer);
+        this.suggest(query);
+      }
+    }
+  }
+
+  moveSelection(direction) {
     this.listbox.children[this.activeIndex]?.setAttribute("aria-selected", "false");
     this.activeIndex = this.activeIndex === -1 && direction < 0
       ? this.options.length - 1
@@ -153,23 +184,32 @@ class CityDirectory extends CitySearch {
     this.favorites = document.querySelector(".favorite-list");
     this.history = document.querySelector(".history-list");
     this.toggle = document.querySelector(".favorite-toggle");
-    this.clear = document.querySelector(".clear-history");
+    this.clearButtons = document.querySelectorAll(".clear-history, .clear-favorites");
     this.dialog = document.querySelector(".history-dialog");
     this.feedback = document.querySelector(".city-feedback");
     this.state = this.read();
     this.render();
     this.toggle.addEventListener("click", () => this.toggleFavorite());
-    this.clear.addEventListener("click", () => {
-      this.dialog.returnValue = "";
-      this.dialog.showModal();
-    });
+    for (const button of this.clearButtons) {
+      button.addEventListener("click", () => {
+        this.clearTarget = button.classList.contains("clear-history") ? "history" : "favorites";
+        this.clearSection = button.closest("section");
+        const label = this.clearTarget === "history" ? "buscas recentes" : "favoritos";
+        this.dialog.querySelector("h2").textContent = "Limpar " + label + "?";
+        this.dialog.querySelector("p").textContent = "A lista de " + label + " será apagada deste navegador.";
+        this.dialog.querySelector('[value="limpar"]').textContent = "Limpar " + label;
+        this.dialog.returnValue = "";
+        this.dialog.showModal();
+      });
+    }
     this.dialog.addEventListener("close", () => {
       if (this.dialog.returnValue !== "limpar") return;
-      this.state.history = [];
-      this.save();
+      this.state[this.clearTarget] = [];
+      const persisted = this.save();
       this.render();
-      document.querySelector("#favoritos").focus({ preventScroll: true });
-      this.feedback.textContent = "Histórico de buscas limpo.";
+      this.clearSection.focus({ preventScroll: true });
+      this.feedback.textContent = (this.clearTarget === "history" ? "Buscas recentes apagadas." : "Favoritos apagados.") +
+        (persisted ? "" : " A alteração vale apenas nesta visita.");
     });
   }
 
@@ -180,12 +220,9 @@ class CityDirectory extends CitySearch {
     } catch {
       // O painel continua disponível com uma lista temporária.
     }
-    const cities = (list) => Array.isArray(list)
-      ? [...new Map(list.filter(isCity).map((city) => [city.id, city])).values()]
-      : [];
     return {
-      favorites: cities(stored?.favorites),
-      history: cities(stored?.history).slice(0, 10),
+      favorites: uniqueCities(stored?.favorites),
+      history: uniqueCities(stored?.history).slice(0, 10),
       last: isCity(stored?.last) ? stored.last : null,
     };
   }
@@ -193,8 +230,9 @@ class CityDirectory extends CitySearch {
   save() {
     try {
       localStorage.setItem(cityStorageKey, JSON.stringify(this.state));
+      return true;
     } catch {
-      // As alterações ainda podem ser usadas nesta visita.
+      return false;
     }
   }
 
@@ -217,9 +255,10 @@ class CityDirectory extends CitySearch {
     this.state.favorites = saved
       ? this.state.favorites.filter((city) => city.id !== location.id)
       : [...this.state.favorites, location];
-    this.save();
+    const persisted = this.save();
     this.render();
-    this.feedback.textContent = saved ? "Cidade removida dos favoritos." : "Cidade adicionada aos favoritos.";
+    this.feedback.textContent = (saved ? "Cidade removida dos favoritos." : "Cidade adicionada aos favoritos.") +
+      (persisted ? "" : " A alteração vale apenas nesta visita.");
   }
 
   render() {
@@ -232,7 +271,10 @@ class CityDirectory extends CitySearch {
     this.renderList(this.history, this.state.history);
     document.querySelector(".favorites-empty").hidden = this.state.favorites.length > 0;
     document.querySelector(".history-empty").hidden = this.state.history.length > 0;
-    this.clear.disabled = this.state.history.length === 0;
+    for (const button of this.clearButtons) {
+      const list = button.classList.contains("clear-history") ? this.state.history : this.state.favorites;
+      button.disabled = list.length === 0;
+    }
   }
 
   renderList(list, locations) {

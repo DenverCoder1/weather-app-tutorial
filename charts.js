@@ -18,8 +18,8 @@ class ForecastChart {
       if (event.pointerType !== "touch") this.selectAt(event);
     });
     this.canvas.addEventListener("pointerdown", (event) => this.selectAt(event));
-    new ResizeObserver(() => this.draw()).observe(this.canvas);
-    new MutationObserver(() => this.draw()).observe(document.documentElement, {
+    new ResizeObserver(() => this.scheduleDraw()).observe(this.canvas);
+    new MutationObserver(() => this.scheduleDraw()).observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["data-theme"],
     });
@@ -29,11 +29,12 @@ class ForecastChart {
     this.samples = samples;
     this.series = series;
     this.index = 0;
+    this.plot = undefined;
     this.panel.querySelector(".chart-period").textContent = period;
     this.refresh();
   }
 
-  get unit() {
+  get baseUnit() {
     const customUnit = this.metric.selectedOptions[0]?.dataset.unit;
     if (customUnit) return customUnit;
     if (this.metric.value === "temperature_2m") return "°C";
@@ -41,19 +42,28 @@ class ForecastChart {
     return "%";
   }
 
+  get unit() {
+    return readingUnit(this.baseUnit);
+  }
+
   refresh() {
     this.values = this.series.length
       ? this.series.map((_, index) => this.samples.map((sample) => sample.cities[index]?.[this.metric.value]))
       : [this.samples.map((sample) => sample[this.metric.value])];
+    this.values = this.values.map((values) => values.map((value) => convertReading(value, this.baseUnit)));
     const available = this.values.some((values) => values.some(Number.isFinite));
     this.empty.hidden = available;
     this.content.hidden = !available;
-    if (!available) return;
+    if (!available) {
+      this.plot = undefined;
+      return;
+    }
     this.range.max = this.samples.length - 1;
     this.select(this.index);
   }
 
   select(index) {
+    if (!this.samples[index] || this.content.hidden) return;
     this.index = index;
     this.range.value = index;
     const { label } = this.samples[index];
@@ -68,7 +78,7 @@ class ForecastChart {
     const reading = label + " · " + metric + ": " + values;
     this.reading.textContent = reading;
     this.range.setAttribute("aria-valuetext", reading);
-    this.draw();
+    this.scheduleDraw();
   }
 
   selectAt(event) {
@@ -79,6 +89,14 @@ class ForecastChart {
     if (index !== this.index) this.select(index);
   }
 
+  scheduleDraw() {
+    if (this.frame !== undefined) return;
+    this.frame = requestAnimationFrame(() => {
+      this.frame = undefined;
+      this.draw();
+    });
+  }
+
   draw() {
     if (this.content.hidden || !this.values?.length || !this.context) return;
     const width = this.canvas.clientWidth;
@@ -86,9 +104,14 @@ class ForecastChart {
     if (!width || !height) return;
     const scale = window.devicePixelRatio || 1;
     const ctx = this.context;
-    this.canvas.width = Math.round(width * scale);
-    this.canvas.height = Math.round(height * scale);
+    const pixelWidth = Math.round(width * scale);
+    const pixelHeight = Math.round(height * scale);
+    if (this.canvas.width !== pixelWidth) this.canvas.width = pixelWidth;
+    if (this.canvas.height !== pixelHeight) this.canvas.height = pixelHeight;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
 
     const style = getComputedStyle(this.panel);
     const accent = style.getPropertyValue("--accent").trim();
@@ -100,7 +123,7 @@ class ForecastChart {
     const top = 25;
     const bottom = height - 31;
     const numbers = this.values.flat().filter(Number.isFinite);
-    const lowest = this.unit === "°C" ? Math.min(...numbers) : 0;
+    const lowest = this.baseUnit === "°C" ? Math.min(...numbers) : 0;
     const highest = this.unit === "%" ? 100 : Math.max(...numbers);
     const span = Math.max(highest - lowest, 1);
     const order = 10 ** Math.floor(Math.log10(span / 4));
@@ -116,6 +139,7 @@ class ForecastChart {
 
     ctx.font = "12px Manrope, system-ui, sans-serif";
     ctx.fillStyle = muted;
+    ctx.textAlign = "left";
     ctx.fillText(this.unit, 5, 12);
     for (let i = 0; i <= Math.round((max - min) / step); i++) {
       const value = min + i * step;
@@ -136,7 +160,7 @@ class ForecastChart {
     }
 
     this.values.forEach((values, index) =>
-      this.drawSeries(ctx, values, x, y, index === 0 ? accent : alternate, index > 0));
+      this.drawSeries(ctx, values, x, y, index === 0 ? accent : alternate, index));
     ctx.strokeStyle = muted;
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 4]);
@@ -146,20 +170,22 @@ class ForecastChart {
     ctx.stroke();
   }
 
-  drawSeries(ctx, values, x, y, color, dashed) {
+  drawSeries(ctx, values, x, y, color, seriesIndex) {
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2;
-    ctx.setLineDash(dashed ? [6, 4] : []);
+    ctx.setLineDash(seriesIndex > 0 ? [6, 4] : []);
     let previous = -1;
+    let previousTime;
     ctx.beginPath();
     for (const [index, value] of values.entries()) {
       if (!Number.isFinite(value)) {
-        previous = -1;
+        if (!this.series.length || this.samples[index].cities[seriesIndex]) previous = -1;
         continue;
       }
+      const time = this.series.length ? this.samples[index].cities[seriesIndex].timestamp : this.samples[index].timestamp;
       const pointY = y(value);
-      if (previous < 0 || this.samples[index].timestamp - this.samples[previous].timestamp > 3600) {
+      if (previous < 0 || time - previousTime !== 3600) {
         ctx.moveTo(x[index], pointY);
       } else if (this.metric.value === "temperature_2m") {
         const middle = (x[previous] + x[index]) / 2;
@@ -168,6 +194,7 @@ class ForecastChart {
         ctx.lineTo(x[index], pointY);
       }
       previous = index;
+      previousTime = time;
     }
     ctx.stroke();
     for (const [index, value] of values.entries()) {
