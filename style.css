@@ -6,8 +6,19 @@ body {
   margin: 0;
   font-family: 'Open Sans', sans-serif;
   background: #222;
-  background-image: url('https://source.unsplash.com/1600x900/?landscape');
   font-size: 120%;
+}
+
+body[data-sky="clear"] {
+  background-image: linear-gradient(155deg, #274e72, #687e8d);
+}
+
+body[data-sky="cloudy"] {
+  background-image: linear-gradient(155deg, #30394a, #626b77);
+}
+
+body[data-sky="night"] {
+  background-image: linear-gradient(155deg, #151a2f, #363852);
 }
 
 .card {
@@ -66,21 +77,17 @@ h1.temp {
 }
 
 .description {
-  text-transform: capitalize;
   margin-left: 8px;
 }
 
-.weather.loading {
-  visibility: hidden;
-  max-height: 20px;
-  position: relative;
+.icon {
+  font-size: 1.5em;
 }
 
-.weather.loading:after {
-  visibility: visible;
-  content: "Loading...";
-  color: white;
-  position: absolute;
-  top: 0;
-  left: 20px;
+.weather a {
+  color: inherit;
+}
+
+.status:not(:empty) {
+  margin-top: 0.75em;
 }
