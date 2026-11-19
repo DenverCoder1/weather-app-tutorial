@@ -1,40 +1,353 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Previsão do tempo</title>
-  <link rel="preconnect" href="https://fonts.gstatic.com">
-  <link href="https://fonts.googleapis.com/css2?family=Open+Sans&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ATMOS, seu painel de previsão do tempo.">
+  <title>ATMOS · Previsão do tempo</title>
+  <meta name="color-scheme" content="light dark">
+  <script src="./theme.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./style.css">
+  <script src="./charts.js" defer></script>
+  <script src="./cities.js" defer></script>
+  <script src="./compare.js" defer></script>
+  <script src="./environment.js" defer></script>
   <script src="./script.js" defer></script>
 </head>
-
 <body>
-  <div class="card">
-    <form class="search">
-      <input type="search" class="search-bar" placeholder="Buscar cidade" aria-label="Nome da cidade">
-      <button type="submit" aria-label="Buscar cidade"><svg aria-hidden="true" stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024" height="1.5em"
-          width="1.5em" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M909.6 854.5L649.9 594.8C690.2 542.7 712 479 712 412c0-80.2-31.3-155.4-87.9-212.1-56.6-56.7-132-87.9-212.1-87.9s-155.5 31.3-212.1 87.9C143.2 256.5 112 331.8 112 412c0 80.1 31.3 155.5 87.9 212.1C256.5 680.8 331.8 712 412 712c67 0 130.6-21.8 182.7-62l259.7 259.6a8.2 8.2 0 0 0 11.6 0l43.6-43.5a8.2 8.2 0 0 0 0-11.6zM570.4 570.4C528 612.7 471.8 636 412 636s-116-23.3-158.4-65.6C211.3 528 188 471.8 188 412s23.3-116.1 65.6-158.4C296 211.3 352.2 188 412 188s116.1 23.2 158.4 65.6S636 352.2 636 412s-23.3 116.1-65.6 158.4z">
-          </path>
-        </svg></button>
-    </form>
-    <div class="status" role="status">Carregando dados meteorológicos…</div>
-    <div class="weather" hidden aria-live="polite">
-      <h2 class="city"></h2>
-      <h1 class="temp"></h1>
-      <div class="flex">
-        <span class="icon" aria-hidden="true"></span>
-        <div class="description"></div>
+  <a class="skip-link" href="#painel">Pular para o conteúdo</a>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <a href="#painel" class="brand" aria-label="ATMOS, painel"><span class="brand-mark" aria-hidden="true">◒</span><span class="brand-name">ATMOS</span></a>
+        <button type="button" class="control sidebar-toggle" aria-label="Recolher menu" aria-expanded="true" aria-controls="menu" title="Recolher menu"><span aria-hidden="true">☰</span></button>
       </div>
-      <div class="humidity"></div>
-      <div class="wind"></div>
-      <small>Dados meteorológicos por <a href="https://open-meteo.com/">Open-Meteo</a></small>
-    </div>
+
+      <nav id="menu" aria-label="Navegação principal">
+        <a class="nav-item" href="#painel" aria-current="location" aria-label="Painel" title="Painel"><span aria-hidden="true">▦</span><span class="nav-label">Painel</span></a>
+        <a class="nav-item" href="#graficos" aria-label="Gráficos" title="Gráficos"><span aria-hidden="true">▥</span><span class="nav-label">Gráficos</span></a>
+        <a class="nav-item" href="#favoritos" aria-label="Favoritos" title="Favoritos"><span aria-hidden="true">♡</span><span class="nav-label">Favoritos</span></a>
+        <a class="nav-item" href="#comparar" aria-label="Comparar" title="Comparar"><span aria-hidden="true">⇄</span><span class="nav-label">Comparar</span></a>
+        <a class="nav-item" href="#mapas" aria-label="Mapas" title="Mapas"><span aria-hidden="true">◇</span><span class="nav-label">Mapas</span></a>
+        <a class="nav-item" href="#qualidade-do-ar" aria-label="Qualidade do ar" title="Qualidade do ar"><span aria-hidden="true">≋</span><span class="nav-label">Qualidade do ar</span></a>
+        <button type="button" class="nav-item" disabled aria-label="Calendário, indisponível" title="Calendário, indisponível"><span aria-hidden="true">▣</span><span class="nav-label">Calendário</span></button>
+        <button type="button" class="nav-item" disabled aria-label="Configurações, indisponível" title="Configurações, indisponível"><span aria-hidden="true">⚙</span><span class="nav-label">Configurações</span></button>
+      </nav>
+    </aside>
+
+    <main id="painel" class="main" tabindex="-1">
+      <header class="topbar">
+        <form class="search" role="search">
+          <label class="sr-only" for="city-search">Nome da cidade</label>
+          <input type="search" id="city-search" class="search-bar" placeholder="Buscar cidade" autocomplete="off"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="city-suggestions">
+          <button class="search-submit" type="submit" aria-label="Buscar cidade" title="Buscar cidade"><span class="search-symbol" aria-hidden="true"></span></button>
+          <div class="suggestion-popup" hidden>
+            <p class="suggestion-status" role="status"></p>
+            <ul id="city-suggestions" role="listbox" aria-label="Cidades encontradas"></ul>
+          </div>
+        </form>
+        <div class="toolbar">
+          <button class="control location-button" type="button" title="Minha localização"><span aria-hidden="true">◎</span><span>Minha localização</span></button>
+          <button class="control refresh-button" type="button" aria-label="Atualizar dados" title="Atualizar dados"><span aria-hidden="true">↻</span></button>
+          <button class="control theme-button" type="button" aria-label="Tema claro" aria-pressed="false" title="Tema claro"><span aria-hidden="true">☀</span></button>
+        </div>
+      </header>
+
+      <p class="status weather-status" role="status"></p>
+      <div class="main-dashboard">
+      <div class="page-heading">
+        <h1>Visão geral</h1>
+        <p class="current-date"></p>
+      </div>
+      <p class="city-feedback sr-only" role="status"></p>
+
+      <section class="panel city-library" id="favoritos" aria-labelledby="favorites-title" tabindex="-1" hidden>
+        <div>
+          <h2 id="favorites-title">Cidades favoritas</h2>
+          <p class="favorites-empty">Você ainda não tem favoritos. Use o coração no cartão de tempo para salvar uma cidade.</p>
+          <ul class="favorite-list"></ul>
+        </div>
+        <div>
+          <div class="library-heading">
+            <h3>Buscas recentes</h3>
+            <button class="control clear-history" type="button" disabled>Limpar histórico</button>
+          </div>
+          <p class="history-empty">As cidades que você buscar aparecerão aqui.</p>
+          <ul class="history-list"></ul>
+        </div>
+      </section>
+      <dialog class="panel history-dialog" aria-labelledby="clear-history-title" aria-describedby="clear-history-description">
+        <h2 id="clear-history-title">Limpar histórico?</h2>
+        <p id="clear-history-description">As buscas recentes serão removidas. Seus favoritos e a cidade padrão serão mantidos.</p>
+        <form method="dialog">
+          <button class="control" value="cancelar" autofocus>Cancelar</button>
+          <button class="control" value="limpar">Limpar histórico</button>
+        </form>
+      </dialog>
+
+      <div class="dashboard skeleton" aria-hidden="true" hidden>
+        <div class="overview">
+          <div class="panel skeleton-current"><span></span><span></span><span></span></div>
+          <div class="panel skeleton-hourly"><span></span><span></span></div>
+          <div class="metric-grid"><div class="panel skeleton-metric"><span></span></div><div class="panel skeleton-metric"><span></span></div></div>
+        </div>
+        <div class="panel skeleton-forecast"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+      <noscript>Ative o JavaScript no navegador para consultar a previsão do tempo.</noscript>
+
+      <div class="dashboard weather" hidden>
+        <div class="overview">
+          <section class="panel current" aria-labelledby="current-title">
+            <div class="weather-art" aria-hidden="true"><span class="icon"></span></div>
+            <div class="current-content">
+              <h2 id="current-title">Condições atuais</h2>
+              <p class="city"></p>
+              <p class="region" hidden></p>
+              <p class="temp"></p>
+              <p class="description"></p>
+              <p class="feels-like"></p>
+              <p class="observation-time"></p>
+            </div>
+            <button class="control favorite-toggle" type="button" aria-label="Salvar cidade como favorita"
+              aria-pressed="false" title="Salvar cidade como favorita" hidden><span aria-hidden="true">♡</span></button>
+          </section>
+
+          <section class="panel hourly" aria-labelledby="hourly-title">
+            <h2 id="hourly-title">Próximas 24 horas</h2>
+            <ol class="hourly-list" tabindex="0" aria-label="Previsão horária no fuso da cidade"></ol>
+            <p class="hourly-status" hidden></p>
+          </section>
+
+          <section aria-labelledby="metrics-title">
+            <h2 id="metrics-title" class="metrics-title">Métricas atuais</h2>
+            <dl class="metric-grid">
+              <div class="panel metric">
+                <dt><span aria-hidden="true">◈</span> Umidade relativa</dt>
+                <dd class="percent-reading"><span class="percent-ring" aria-hidden="true" hidden></span><span class="humidity"></span></dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">≋</span> Vento</dt>
+                <dd class="wind-reading"><span class="compass" aria-hidden="true" hidden><span>N</span><span class="compass-needle">↑</span></span><span class="wind"></span></dd>
+                <dd class="metric-detail">Direção de origem: <span class="wind-direction"></span></dd>
+                <dd class="metric-detail">Rajadas: <span class="wind-gusts"></span></dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">☂</span> Precipitação</dt>
+                <dd class="precipitation-amount"></dd>
+                <dd class="metric-detail precipitation-interval" hidden></dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">☁</span> Cobertura de nuvens</dt>
+                <dd class="percent-reading"><span class="percent-ring" aria-hidden="true" hidden></span><span class="cloud-cover"></span></dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">◉</span> Pressão atmosférica</dt>
+                <dd class="surface-pressure"></dd>
+                <dd class="metric-detail">Na superfície</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section aria-labelledby="daily-title">
+            <h2 id="daily-title" class="metrics-title">Previsão para hoje</h2>
+            <dl class="metric-grid">
+              <div class="panel metric">
+                <dt><span aria-hidden="true">☂</span> Chance de precipitação</dt>
+                <dd class="percent-reading"><span class="percent-ring" aria-hidden="true" hidden></span><span class="precipitation"></span></dd>
+                <dd class="metric-detail">Maior probabilidade horária do dia</dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">☀</span> Índice UV</dt>
+                <dd class="uv-index"></dd>
+                <dd class="metric-detail">Máximo previsto para o dia</dd>
+                <dd class="metric-detail">Estimativa para esta hora: <span class="uv-hourly"></span></dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">◐</span> Nascer e pôr do sol</dt>
+                <dd class="metric-pair"><span><small>Nascer</small><span class="sunrise"></span></span><span><small>Pôr</small><span class="sunset"></span></span></dd>
+              </div>
+              <div class="panel metric">
+                <dt><span aria-hidden="true">↕</span> Temperaturas do dia</dt>
+                <dd class="metric-pair"><span><small>Máxima</small><span class="temperature-max"></span></span><span><small>Mínima</small><span class="temperature-min"></span></span></dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+
+        <section class="panel forecast" aria-labelledby="forecast-title">
+          <h2 id="forecast-title">Previsão semanal</h2>
+          <p>Próximos 7 dias</p>
+          <ol class="forecast-list"></ol>
+          <p class="forecast-status" hidden>Previsão semanal indisponível.</p>
+          <div class="forecast-detail" id="detalhes-do-dia" hidden>
+            <h3></h3>
+            <p class="forecast-detail-summary"></p>
+            <p class="forecast-detail-extra"></p>
+            <a href="#graficos">Ver gráficos do dia</a>
+          </div>
+        </section>
+        <section id="graficos" class="panel charts" aria-labelledby="charts-title" tabindex="-1">
+          <div class="charts-header">
+            <div><h2 id="charts-title">Gráficos da previsão</h2><p class="chart-period"></p></div>
+            <div class="chart-controls">
+              <button class="control chart-reset" type="button" disabled>Próximas 24 h</button>
+              <label class="sr-only" for="chart-metric">Métrica do gráfico</label>
+              <select id="chart-metric" class="control">
+                <option value="temperature_2m">Temperatura</option>
+                <option value="wind_speed_10m">Velocidade do vento</option>
+                <option value="precipitation_probability">Chance de precipitação</option>
+                <option value="relative_humidity_2m">Umidade relativa</option>
+                <option value="cloud_cover">Cobertura de nuvens</option>
+              </select>
+            </div>
+          </div>
+          <p class="chart-empty" hidden>Dados indisponíveis para esta métrica no período selecionado.</p>
+          <div class="chart-content">
+            <p class="chart-reading" id="chart-reading"></p>
+            <canvas class="chart-canvas" aria-hidden="true"></canvas>
+            <label class="chart-scrubber">Horário no gráfico
+              <input class="chart-hour" type="range" min="0" max="0" value="0" aria-describedby="chart-reading">
+            </label>
+          </div>
+        </section>
+      </div>
+      </div>
+      <section id="comparar" class="comparison" aria-labelledby="compare-title" tabindex="-1" hidden>
+        <header class="page-heading compare-heading">
+          <h1 id="compare-title">Comparar cidades</h1>
+          <button class="control compare-swap" type="button" disabled><span aria-hidden="true">⇄</span> Trocar cidades</button>
+        </header>
+        <p class="compare-feedback sr-only" role="status"></p>
+        <div class="compare-grid"></div>
+
+        <section class="panel compare-differences" aria-labelledby="difference-title" hidden>
+          <h2 id="difference-title">Diferença entre cidades</h2>
+          <p>Os valores mostram Cidade B menos Cidade A. Para percentuais, a diferença é em pontos percentuais (p.p.).</p>
+          <p class="difference-context"></p>
+          <dl class="difference-values"></dl>
+        </section>
+
+        <section class="panel charts compare-charts" aria-labelledby="compare-chart-title" hidden>
+          <div class="charts-header">
+            <div><h2 id="compare-chart-title">Previsão horária comparada</h2><p class="chart-period"></p></div>
+            <label class="sr-only" for="compare-chart-metric">Métrica do gráfico comparativo</label>
+            <select id="compare-chart-metric" class="control">
+              <option value="temperature_2m">Temperatura</option>
+              <option value="wind_speed_10m">Velocidade do vento</option>
+              <option value="precipitation_probability">Chance de precipitação</option>
+              <option value="relative_humidity_2m">Umidade relativa</option>
+              <option value="cloud_cover">Cobertura de nuvens</option>
+            </select>
+          </div>
+          <ul class="compare-legend"><li>Cidade A</li><li>Cidade B</li></ul>
+          <p class="chart-empty" hidden>Não há dados horários para esta métrica.</p>
+          <div class="chart-content">
+            <p class="chart-reading" id="compare-chart-reading"></p>
+            <canvas class="chart-canvas" aria-hidden="true"></canvas>
+            <label class="chart-scrubber">Faixa de hora local
+              <input class="chart-hour" type="range" min="0" max="0" value="0" aria-describedby="compare-chart-reading">
+            </label>
+          </div>
+        </section>
+      </section>
+      <template id="compare-city-template">
+        <article class="panel compare-city">
+          <h2></h2>
+          <form class="search compare-search" role="search">
+            <input type="search" class="search-bar" placeholder="Buscar cidade" autocomplete="off"
+              role="combobox" aria-autocomplete="list" aria-expanded="false">
+            <button class="search-submit" type="submit" aria-label="Buscar cidade"><span class="search-symbol" aria-hidden="true"></span></button>
+            <div class="suggestion-popup" hidden>
+              <p class="suggestion-status" role="status"></p>
+              <ul role="listbox" aria-label="Cidades encontradas"></ul>
+            </div>
+          </form>
+          <p class="compare-status status" role="status"></p>
+          <div class="compare-details" hidden>
+            <div class="compare-place"><div><h3></h3><p class="compare-region"></p><p class="compare-condition"></p></div><span aria-hidden="true" class="compare-icon"></span></div>
+            <h4>Condições atuais</h4>
+            <p class="compare-observed"></p>
+            <dl class="compare-current"></dl>
+            <h4>Previsão de hoje</h4>
+            <p class="compare-date"></p>
+            <dl class="compare-daily"></dl>
+          </div>
+        </article>
+      </template>
+      <section id="mapas" class="environment" aria-labelledby="map-title" tabindex="-1" hidden>
+        <header class="page-heading"><h1 id="map-title">Mapas</h1><p class="environment-place map-place"></p></header>
+        <p class="map-status status" role="status"></p>
+        <div class="map-grid" hidden>
+          <div class="panel map-panel">
+            <p id="map-instructions">Clique no mapa para consultar um ponto. Com o mapa em foco, use as setas para navegar e as teclas + e − para alterar o zoom.</p>
+            <div class="map-canvas" aria-label="Mapa interativo da região" aria-describedby="map-instructions" role="region"></div>
+            <div class="map-controls">
+              <button class="control map-center" type="button">Voltar à cidade</button>
+              <button class="control map-inspect" type="button">Consultar centro do mapa</button>
+            </div>
+          </div>
+          <section class="panel map-point" aria-labelledby="map-point-title">
+            <h2 id="map-point-title">Tempo no ponto</h2>
+            <p class="map-point-status" role="status">Selecione um ponto no mapa para consultar o tempo atual.</p>
+            <div class="map-point-data" hidden>
+              <p class="map-point-coordinates"></p>
+              <p class="map-point-condition"></p>
+              <dl class="map-point-values"></dl>
+            </div>
+          </section>
+        </div>
+        <button class="control map-retry" type="button" hidden>Tentar novamente</button>
+      </section>
+
+      <section id="qualidade-do-ar" class="environment" aria-labelledby="air-title" tabindex="-1" hidden>
+        <header class="page-heading"><h1 id="air-title">Qualidade do ar</h1><p class="environment-place air-place"></p></header>
+        <p class="air-status status" role="status"></p>
+        <button class="control air-retry" type="button" hidden>Tentar novamente</button>
+        <div class="air-data" hidden>
+          <div class="air-heading">
+            <p>Estimativas do modelo CAMS. As leituras podem diferir das medições de estações locais.</p>
+            <label class="air-scale-control" for="air-scale">Escala do índice
+              <select id="air-scale" class="control">
+                <option value="us_aqi">IQA dos EUA</option>
+                <option value="european_aqi">IQA europeu</option>
+              </select>
+            </label>
+          </div>
+          <p class="air-time"></p>
+          <dl class="air-metrics">
+            <div class="panel metric"><dt class="air-index-label">Índice de qualidade do ar</dt><dd class="air-index"></dd><dd class="metric-detail air-category"></dd></div>
+            <div class="panel metric"><dt>Material particulado fino (PM₂,₅)</dt><dd class="air-pm25"></dd></div>
+            <div class="panel metric"><dt>Material particulado (PM₁₀)</dt><dd class="air-pm10"></dd></div>
+          </dl>
+          <section class="panel charts air-chart" aria-labelledby="air-chart-title">
+            <div class="charts-header">
+              <div><h2 id="air-chart-title">Tendência recente</h2><p class="chart-period"></p></div>
+              <label class="sr-only" for="air-chart-metric">Métrica da tendência</label>
+              <select id="air-chart-metric" class="control">
+                <option value="us_aqi" data-unit="pts">IQA dos EUA</option>
+                <option value="european_aqi" data-unit="pts">IQA europeu</option>
+                <option value="pm2_5" data-unit="µg/m³">PM₂,₅</option>
+                <option value="pm10" data-unit="µg/m³">PM₁₀</option>
+              </select>
+            </div>
+            <p class="chart-empty" hidden>Dados horários indisponíveis para esta métrica.</p>
+            <div class="chart-content">
+              <p class="chart-reading" id="air-chart-reading"></p>
+              <canvas class="chart-canvas" aria-hidden="true"></canvas>
+              <label class="chart-scrubber">Horário da leitura
+                <input class="chart-hour" type="range" min="0" max="0" value="0" aria-describedby="air-chart-reading">
+              </label>
+            </div>
+          </section>
+          <p class="air-source">Dados de <a href="https://open-meteo.com/en/docs/air-quality-api">Open-Meteo</a> e <a href="https://atmosphere.copernicus.eu/">Copernicus (CAMS)</a>.</p>
+        </div>
+      </section>
+      <footer>Dados meteorológicos por <a href="https://open-meteo.com/">Open-Meteo</a></footer>
+    </main>
   </div>
 </body>
-
 </html>
